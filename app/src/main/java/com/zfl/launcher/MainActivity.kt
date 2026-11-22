@@ -281,9 +281,9 @@ class MainActivity : ComponentActivity(), LauncherActions {
             // No icon rectangle (a gesture or a command): the system grows the app from the screen center.
             ActivityOptions.makeScaleUpAnimation(
                 window.decorView, source.left, source.top, source.width(), source.height(),
-            ).toBundle()
+            ).withoutSplashAnimation().toBundle()
         } else {
-            ActivityOptions.makeCustomAnimation(this, 0, 0).toBundle()
+            ActivityOptions.makeCustomAnimation(this, 0, 0).withoutSplashAnimation().toBundle()
         }
         startApp(app, source, options)
     }
@@ -297,7 +297,12 @@ class MainActivity : ComponentActivity(), LauncherActions {
         vm.beginAppTransition(bounds, icons.cached(app, iconSizePx))
         lifecycleScope.launch {
             delay((Motion.APP_LEAD_MS * animatorScale()).toLong())
-            val options = ActivityOptions.makeCustomAnimation(this@MainActivity, R.anim.app_fade_in, R.anim.app_hold).toBundle()
+            // The icon-origin surface is the only opening animation: the app's window enters
+            // without any animation of its own (no system zoom from the screen center) and its
+            // splash screen is a plain solid color, with no centered icon that scales or fades.
+            val options = ActivityOptions.makeCustomAnimation(this@MainActivity, R.anim.app_enter_none, R.anim.app_hold)
+                .withoutSplashAnimation()
+                .toBundle()
             if (!startApp(app, source, options)) {
                 vm.beginAppClosing()
                 return@launch
@@ -305,6 +310,13 @@ class MainActivity : ComponentActivity(), LauncherActions {
             // Still in front after this long: the app did not open, so the surface goes home again.
             delay(Motion.APP_START_TIMEOUT_MS)
             if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) vm.beginAppClosing()
+        }
+    }
+
+    /** Android 13+: solid-color splash, so the system draws no centered app icon that animates. */
+    private fun ActivityOptions.withoutSplashAnimation(): ActivityOptions = apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            splashScreenStyle = android.window.SplashScreen.SPLASH_SCREEN_STYLE_SOLID_COLOR
         }
     }
 

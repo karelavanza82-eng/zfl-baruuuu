@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The opened app appears at once: the launcher's icon-to-screen surface (see AppTransition) is the
+     only opening animation, so the app window must not fade or zoom from the screen center. -->
+<alpha xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="1"
+    android:fromAlpha="1.0"
+    android:interpolator="@android:interpolator/linear"
+    android:toAlpha="1.0" />

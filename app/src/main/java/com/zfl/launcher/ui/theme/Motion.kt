@@ -40,7 +40,7 @@ object Motion {
     const val APP_OPEN_MS: Int = 380
     const val APP_CLOSE_MS: Int = 340
     /** The app starts this long after the tap, when the surface has almost filled the screen. */
-    const val APP_LEAD_MS: Int = 220
+    const val APP_LEAD_MS: Int = 280
     /** If no app covers the home screen by then, the surface returns to its icon. */
     const val APP_START_TIMEOUT_MS: Long = 2500
     /** Corner of the full-screen surface. */

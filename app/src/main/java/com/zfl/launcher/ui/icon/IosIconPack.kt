@@ -65,6 +65,8 @@ object IosIconPack {
         "com.google.android.documentsui" to R.drawable.ios26_com_apple_documentsapp,
         "com.google.android.apps.walletnfcrel" to R.drawable.ios26_com_apple_passbook,
         "com.google.android.apps.podcasts" to R.drawable.ios26_com_apple_podcasts,
+        "com.google.android.apps.maps" to R.drawable.ios26_com_apple_maps,
+        "com.android.vending" to R.drawable.ios26_com_apple_appstore,
         "com.android.chrome" to R.drawable.ios26_gg_chrome,
         "com.google.android.googlequicksearchbox" to R.drawable.ios26_com_google_googlemobile,
         "com.google.android.apps.photos" to R.drawable.ios26_com_google_photos,
