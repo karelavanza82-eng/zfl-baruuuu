@@ -82,8 +82,6 @@ data class SettingsState(
     val folders: FolderPreferences = FolderPreferences(),
     /** Default, Dark, Tinted or Auto (Default/Dark following the system theme). */
     val iconAppearance: IconAppearance = IconAppearance.Default,
-    /** Selected third-party icon pack package; null uses ZFL built-in icons. */
-    val iconPackPackage: String? = null,
     /** Tinted icons take their hue from the wallpaper instead of [iconTintColor]. */
     val iconTintFromWallpaper: Boolean = true,
     /** Opaque ARGB color picked by the user for Tinted icons. */
@@ -143,12 +141,7 @@ data class SettingsState(
 
     fun withStyle(area: IconArea, style: AreaStyle): SettingsState = when (area) {
         IconArea.Home -> copy(homeStyle = style)
-        IconArea.Dock -> copy(
-            dockStyle = style,
-            homeStyle = if (style.iconScale != dockStyle.iconScale) {
-                homeStyle.copy(iconScale = style.iconScale ?: iconScale)
-            } else homeStyle,
-        )
+        IconArea.Dock -> copy(dockStyle = style)
         IconArea.Folder -> copy(folderStyle = style)
     }
 

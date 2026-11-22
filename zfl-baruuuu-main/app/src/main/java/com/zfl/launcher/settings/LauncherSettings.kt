@@ -78,7 +78,6 @@ class LauncherSettings private constructor(context: Context) {
             IconArea.entries.forEach { putAreaStyle(it, next.style(it)) }
             putFolders(next.folders)
             putString(KEY_ICON_APPEARANCE, next.iconAppearance.name)
-            putString(KEY_ICON_PACK, next.iconPackPackage)
             putBoolean(KEY_ICON_TINT_WALLPAPER, next.iconTintFromWallpaper)
             putInt(KEY_ICON_TINT_COLOR, next.iconTintColor)
             putFloat(KEY_ICON_TINT_SATURATION, next.iconTintSaturation)
@@ -206,7 +205,6 @@ class LauncherSettings private constructor(context: Context) {
         folderStyle = readAreaStyle(IconArea.Folder),
         folders = FolderPreferences.fromStored(prefs.all),
         iconAppearance = IconAppearance.fromStored(prefs.getString(KEY_ICON_APPEARANCE, null)),
-        iconPackPackage = prefs.getString(KEY_ICON_PACK, null),
         iconTintFromWallpaper = prefs.getBoolean(KEY_ICON_TINT_WALLPAPER, Defaults.iconTintFromWallpaper),
         iconTintColor = prefs.getInt(KEY_ICON_TINT_COLOR, Defaults.iconTintColor),
         iconTintSaturation = prefs.getFloat(KEY_ICON_TINT_SATURATION, Defaults.iconTintSaturation),
@@ -287,7 +285,6 @@ class LauncherSettings private constructor(context: Context) {
         private const val KEY_ICON_CORNER = "icon_corner"
         private const val KEY_SHOW_LABELS = "show_labels"
         private const val KEY_ICON_APPEARANCE = "icon_appearance"
-        private const val KEY_ICON_PACK = "icon_pack_package"
         private const val KEY_ICON_TINT_WALLPAPER = "icon_tint_wallpaper"
         private const val KEY_ICON_TINT_COLOR = "icon_tint_color"
         private const val KEY_ICON_TINT_SATURATION = "icon_tint_saturation"

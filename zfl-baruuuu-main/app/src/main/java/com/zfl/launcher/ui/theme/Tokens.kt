@@ -13,8 +13,8 @@ object Tokens {
     val GridSidePadding = 15.dp
     /** The grid sits lower than a plain grid, like the iPhone home screen under its widgets row. */
     val GridTopPadding = 48.dp
-    val GridSideMarginMax = 100.dp
-    val GridVerticalMarginMax = 100.dp
+    val GridSideMarginMax = 48.dp
+    val GridVerticalMarginMax = 64.dp
     /** Tallest a grid cell may get at the default icon size, so icons don't drift apart on a sparse grid. */
     val MaxCellHeight = 102.dp
     /** Smallest cell the grid keeps whatever the margins: a touch target. */

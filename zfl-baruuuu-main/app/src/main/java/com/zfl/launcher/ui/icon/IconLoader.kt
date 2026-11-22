@@ -3,9 +3,6 @@ package com.zfl.launcher.ui.icon
 import android.app.WallpaperColors
 import android.app.WallpaperManager
 import android.content.res.Configuration
-import android.content.Context
-import android.util.Xml
-import org.xmlpull.v1.XmlPullParser
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -63,8 +60,6 @@ class IconLoader(
     private val settings: LauncherSettings,
 ) {
     private val resources = activity.resources
-    private val appContext = activity.applicationContext
-    @Volatile private var iconPackMappings: Pair<String, Map<String, String>>? = null
 
     private val cache = object : LruCache<String, ImageBitmap>(MAX_CACHE_BYTES) {
         override fun sizeOf(key: String, value: ImageBitmap): Int = value.width * value.height * 4
@@ -149,7 +144,7 @@ class IconLoader(
      */
     fun cacheKey(app: AppInfo, sizePx: Int): String? {
         val spec = spec ?: return null
-        return iconCacheKey(app.key, app.iconVersion, customIcons[app.key], sizePx, spec) + "@pack:${prefs.iconPackPackage.orEmpty()}"
+        return iconCacheKey(app.key, app.iconVersion, customIcons[app.key], sizePx, spec)
     }
 
     /** Returns the icon of [sizePx] if it is already rendered, without blocking. */
@@ -162,69 +157,17 @@ class IconLoader(
     suspend fun load(app: AppInfo, sizePx: Int): ImageBitmap? {
         val spec = spec ?: return null
         val stamp = customIcons[app.key]
-        val key = iconCacheKey(app.key, app.iconVersion, stamp, sizePx, spec) + "@pack:${prefs.iconPackPackage.orEmpty()}"
+        val key = iconCacheKey(app.key, app.iconVersion, stamp, sizePx, spec)
         cache.get(key)?.let { return it }
         return withContext(Dispatchers.IO) {
             val density = resources.displayMetrics.densityDpi
             // Custom icon of the user first, then the bundled iOS 26 pack, then the app's own icon.
             val icon = stamp?.let { loadCustom(app, spec, sizePx) }
-                ?: loadThirdPartyIcon(app, spec, sizePx)
                 ?: IosIconPack.load(resources, app.packageName, sizePx)
                 ?: render(app.info.getIcon(density), spec, sizePx)
-            if (liveSuffixes.any(key::contains)) cache.put(key, icon)
+            if (liveSuffixes.any(key::endsWith)) cache.put(key, icon)
             icon
         }
-    }
-
-
-    /** Loads standard ADW/Nova-style appfilter.xml mappings from a selected installed icon pack. */
-    private fun loadThirdPartyIcon(app: AppInfo, spec: IconSpec, sizePx: Int): ImageBitmap? {
-        val pack = prefs.iconPackPackage ?: return null
-        return runCatching {
-            val mapping = iconPackMappings?.takeIf { it.first == pack }?.second ?: run {
-                val parsed = HashMap<String, String>()
-                val packContext = appContext.createPackageContext(pack, Context.CONTEXT_IGNORE_SECURITY)
-                fun readMappings(parser: XmlPullParser) {
-                    var event = parser.eventType
-                    while (event != XmlPullParser.END_DOCUMENT) {
-                        if (event == XmlPullParser.START_TAG && parser.name == "item") {
-                            val component = parser.getAttributeValue(null, "component")
-                            val drawable = parser.getAttributeValue(null, "drawable")
-                            if (!component.isNullOrBlank() && !drawable.isNullOrBlank()) {
-                                val normalized = component.removePrefix("ComponentInfo{").removeSuffix("}")
-                                parsed[normalized] = drawable
-                            }
-                        }
-                        event = parser.next()
-                    }
-                }
-                val xmlId = packContext.resources.getIdentifier("appfilter", "xml", pack)
-                if (xmlId != 0) {
-                    packContext.resources.getXml(xmlId).use(::readMappings)
-                } else {
-                    packContext.assets.open("appfilter.xml").use { input ->
-                        val parser = Xml.newPullParser()
-                        parser.setInput(input, "UTF-8")
-                        readMappings(parser)
-                    }
-                }
-                iconPackMappings = pack to parsed
-                parsed
-            }
-            val component = app.component.flattenToString()
-            val shortClass = app.component.className.removePrefix(app.packageName)
-            val drawableName = mapping[component]
-                ?: mapping["${app.packageName}/${app.component.className}"]
-                ?: mapping["${app.packageName}/$shortClass"]
-                ?: return null
-            val packContext = appContext.createPackageContext(pack, Context.CONTEXT_IGNORE_SECURITY)
-            val drawableId = packContext.resources.getIdentifier(drawableName, "drawable", pack)
-                .takeIf { it != 0 } ?: packContext.resources.getIdentifier(drawableName, "mipmap", pack)
-            if (drawableId == 0) return null
-            val drawable = packContext.resources.getDrawable(drawableId, packContext.theme)
-            val bitmap = render(drawable, spec, sizePx)
-            bitmap
-        }.getOrNull()
     }
 
     private fun loadCustom(app: AppInfo, spec: IconSpec, s: Int): ImageBitmap? {

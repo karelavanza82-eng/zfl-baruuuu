@@ -15,13 +15,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.Icon
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,8 +31,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
-import android.content.pm.PackageManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zfl.launcher.R
 import com.zfl.launcher.island.IslandAccess
@@ -52,8 +46,6 @@ private val Defaults = SettingsState()
 fun IconSettingsScreen(vm: SettingsViewModel, actions: SettingsActions, onOpenArea: (IconArea) -> Unit, onBack: () -> Unit) {
     val settings by vm.settings.state.collectAsStateWithLifecycle()
     val grants by IslandAccess.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    var showIconPackPicker by remember { mutableStateOf(false) }
     // Local values while dragging; persisted when the finger is lifted.
     var scale by remember(settings.iconScale) { mutableFloatStateOf(settings.iconScale) }
     var corner by remember(settings.iconCorner) { mutableFloatStateOf(settings.iconCorner) }
@@ -71,7 +63,6 @@ fun IconSettingsScreen(vm: SettingsViewModel, actions: SettingsActions, onOpenAr
                         iconCorner = Defaults.iconCorner,
                         showLabels = Defaults.showLabels,
                         iconAppearance = Defaults.iconAppearance,
-                        iconPackPackage = Defaults.iconPackPackage,
                         iconTintFromWallpaper = Defaults.iconTintFromWallpaper,
                         iconTintColor = Defaults.iconTintColor,
                         iconTintSaturation = Defaults.iconTintSaturation,
@@ -111,18 +102,6 @@ fun IconSettingsScreen(vm: SettingsViewModel, actions: SettingsActions, onOpenAr
             }
         }
         item { SectionFooter(stringResource(R.string.icons_footer)) }
-        item {
-            SettingsCard {
-                NavRow(
-                    Icons.Rounded.Wallpaper,
-                    "Third-party icon pack",
-                    onClick = { showIconPackPicker = true },
-                    value = settings.iconPackPackage?.let { packageName ->
-                        runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(packageName, 0)).toString() }.getOrNull()
-                    } ?: "ZFL default",
-                )
-            }
-        }
         item { SectionHeader(stringResource(R.string.icons_section_areas)) }
         item { SettingsCard { AreaIconRows(settings, onOpenArea) } }
         item { SectionHeader(stringResource(R.string.badges_section)) }
@@ -166,32 +145,6 @@ fun IconSettingsScreen(vm: SettingsViewModel, actions: SettingsActions, onOpenAr
                 }
             }
         }
-    }
-    if (showIconPackPicker) {
-        val packs = remember(context) {
-            context.packageManager.getInstalledApplications(PackageManager.GET_META_DATA).mapNotNull { info ->
-                val hasAppFilter = runCatching {
-                    val pc = context.createPackageContext(info.packageName, 0)
-                    pc.resources.getIdentifier("appfilter", "xml", info.packageName) != 0 ||
-                        runCatching { pc.assets.open("appfilter.xml").use { true } }.getOrDefault(false)
-                }.getOrDefault(false)
-                if (hasAppFilter) info.packageName to context.packageManager.getApplicationLabel(info).toString() else null
-            }.sortedBy { it.second.lowercase() }
-        }
-        AlertDialog(
-            onDismissRequest = { showIconPackPicker = false },
-            title = { Text("Choose icon pack") },
-            text = {
-                androidx.compose.foundation.lazy.LazyColumn {
-                    item { TextButton(onClick = { vm.settings.update { it.copy(iconPackPackage = null) }; showIconPackPicker = false }) { Text("ZFL default") } }
-                    packs.forEach { (pkg, label) ->
-                        item { TextButton(onClick = { vm.settings.update { it.copy(iconPackPackage = pkg) }; showIconPackPicker = false }) { Text(label) } }
-                    }
-                    if (packs.isEmpty()) item { Text("No compatible icon packs found. Install an icon pack that includes appfilter.xml.") }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showIconPackPicker = false }) { Text("Close") } },
-        )
     }
 }
 
