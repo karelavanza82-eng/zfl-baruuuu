@@ -1,0 +1,144 @@
+package com.zfl.launcher.data
+
+/**
+ * Widget footprint on the home grid, in cells, like iOS. The spans stay the same on wider
+ * grids: a medium widget is four cells wide on a six-column grid too, it is not stretched.
+ */
+enum class WidgetSize(val span: Span) {
+    Small(Span(2, 2)),
+    Medium(Span(4, 2)),
+    Large(Span(4, 4)),
+}
+
+/** Built-in widgets, each available in a few [sizes] (the order of the gallery pages). */
+enum class WidgetKind(val sizes: List<WidgetSize>) {
+    Clock(listOf(WidgetSize.Small, WidgetSize.Medium)),
+    Calendar(listOf(WidgetSize.Small, WidgetSize.Medium)),
+    Weather(listOf(WidgetSize.Small, WidgetSize.Medium, WidgetSize.Large)),
+    Photo(listOf(WidgetSize.Small, WidgetSize.Medium, WidgetSize.Large)),
+    Battery(listOf(WidgetSize.Small)),
+    Suggestions(listOf(WidgetSize.Small, WidgetSize.Medium)),
+}
+
+/** Anything that lives on home pages and the Today page but never in the dock or folders. */
+sealed interface PageWidget : HomeItem {
+    val span: Span
+}
+
+/**
+ * A built-in widget on a home screen page or on the Today page.
+ *
+ * @param photo version stamp of the image chosen for a [WidgetKind.Photo] widget
+ *   (the file is named after [id]); null when none was chosen yet.
+ */
+data class WidgetItem(
+    override val id: String,
+    val kind: WidgetKind,
+    val size: WidgetSize,
+    val photo: Long? = null,
+) : PageWidget {
+    override val span: Span get() = size.span
+}
+
+/**
+ * A widget of another app, hosted through Android's AppWidget framework.
+ *
+ * @param appWidgetId id allocated by our AppWidgetHost and bound to [provider].
+ * @param provider the widget's AppWidgetProvider component, flattened.
+ */
+data class AppWidgetItem(
+    override val id: String,
+    val appWidgetId: Int,
+    val provider: String,
+    override val span: Span,
+) : PageWidget
+
+/** Where a new widget goes: the Today page, or a home screen page. */
+sealed interface WidgetTarget {
+    data object Today : WidgetTarget
+    data class Page(val page: Int) : WidgetTarget
+}
+
+/** Widgets shown on the Today page of a fresh install, like iOS27L (minus its ad). */
+val DEFAULT_TODAY_WIDGETS: List<WidgetItem> = listOf(
+    WidgetItem("widget-today-suggestions", WidgetKind.Suggestions, WidgetSize.Medium),
+    WidgetItem("widget-today-calendar", WidgetKind.Calendar, WidgetSize.Medium),
+    WidgetItem("widget-today-clock", WidgetKind.Clock, WidgetSize.Small),
+    WidgetItem("widget-today-battery", WidgetKind.Battery, WidgetSize.Small),
+)
+
+/** Widgets at the top of the first home page of a fresh install: Weather and Calendar side by side, like the iPhone. */
+val DEFAULT_HOME_WIDGETS: List<WidgetItem> = listOf(
+    WidgetItem("widget-home-weather", WidgetKind.Weather, WidgetSize.Small),
+    WidgetItem("widget-home-calendar", WidgetKind.Calendar, WidgetSize.Small),
+)
+
+/** Every widget anywhere in the layout, built-in or hosted, including stacks and the widgets inside them. */
+fun LayoutData.allPageWidgets(): List<PageWidget> = (pages.flatten().filterIsInstance<PageWidget>() + today).withStackItems()
+
+/** Ids of every hosted widget the layout uses, inside stacks too (anything else our host holds is an orphan). */
+fun LayoutData.usedAppWidgetIds(): Set<Int> = allPageWidgets().filterIsInstance<AppWidgetItem>().mapTo(mutableSetOf()) { it.appWidgetId }
+
+/** Every built-in widget anywhere in the layout. */
+fun LayoutData.allWidgets(): List<WidgetItem> = allPageWidgets().filterIsInstance<WidgetItem>()
+
+fun LayoutData.findWidget(id: String): PageWidget? = allPageWidgets().firstOrNull { it.id == id }
+
+/** Removes hosted widgets whose app is gone ([isAlive] false), e.g. after an uninstall; a stack only loses that widget. */
+fun LayoutData.withoutDeadAppWidgets(isAlive: (Int) -> Boolean, dockCapacity: Int = DEFAULT_DOCK_CAPACITY): LayoutData {
+    val dead = allPageWidgets().filterIsInstance<AppWidgetItem>().filterNot { isAlive(it.appWidgetId) }
+    return if (dead.isEmpty()) this else dead.fold(this) { layout, w -> layout.without(w.id) }.normalized(dockCapacity)
+}
+
+/**
+ * Sizes offered for a hosted widget: its default size and the usual iOS-like sizes it
+ * allows, within its min/max (in cells), smallest first.
+ */
+fun appWidgetSpans(default: Span, resizable: Boolean, min: Span, max: Span?, grid: GridSpec): List<Span> {
+    val candidates = if (resizable) listOf(default, Span(4, 1), Span(2, 2), Span(4, 2), Span(4, 4)) else listOf(default)
+    return candidates.distinct()
+        .filter { it == default || (it.columns >= min.columns && it.rows >= min.rows && (max == null || (it.columns <= max.columns && it.rows <= max.rows))) }
+        .filter(grid::fits)
+        .sortedWith(compareBy({ it.columns * it.rows }, { it.columns }))
+}
+
+/** Adds a widget at the top of a home page (pushing the rest down, like iOS) or at the end of Today. */
+fun LayoutData.addWidget(widget: PageWidget, target: WidgetTarget, dockCapacity: Int = DEFAULT_DOCK_CAPACITY): LayoutData =
+    when (target) {
+        WidgetTarget.Today -> copy(today = today + widget)
+        // A widget bigger than the grid can't be placed; it is not added rather than hidden.
+        is WidgetTarget.Page -> if (!grid.fits(widget.span)) this else {
+            if (cells.isNotEmpty()) {
+                moveToCell(widget, DropPosition.PageCell(target.page.coerceIn(0, pages.size), 0), dockCapacity)
+            } else {
+                val pages = pages.toMutableList()
+                val index = target.page.coerceIn(0, pages.size)
+                if (index == pages.size) pages += listOf(widget) else pages[index] = listOf(widget) + pages[index]
+                copy(pages = pages).normalized(dockCapacity)
+            }
+        }
+    }
+
+/**
+ * Replaces the widget with the same id (new size or photo), re-flowing the pages. A widget
+ * inside a stack is replaced there; one that no longer fits the stack's size is dropped.
+ */
+fun LayoutData.updateWidget(widget: PageWidget, dockCapacity: Int = DEFAULT_DOCK_CAPACITY): LayoutData {
+    if (!grid.fits(widget.span)) return this
+    stackHolding(widget.id)?.let { stack ->
+        return updateStack(stack.id, dockCapacity) { s -> s.copy(items = s.items.map { if (it.id == widget.id) widget else it }) }
+    }
+    fun swap(item: HomeItem): HomeItem = if (item.id == widget.id) widget else item
+    val next = copy(
+        pages = pages.map { page -> page.map(::swap) },
+        today = today.map { if (it.id == widget.id) widget else it },
+    )
+    val page = pages.indexOfFirst { items -> items.any { it.id == widget.id } }
+    val cell = cells[widget.id]
+    return if (page >= 0 && cell != null) {
+        next.moveToCell(widget, DropPosition.PageCell(page, cell), dockCapacity)
+    } else next.normalized(dockCapacity)
+}
+
+fun LayoutData.removeWidget(id: String, dockCapacity: Int = DEFAULT_DOCK_CAPACITY): LayoutData =
+    without(id).normalized(dockCapacity)
