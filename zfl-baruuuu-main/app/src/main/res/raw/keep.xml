@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep the whole bundled iOS 26 icon pack through resource shrinking, even assets with no Android match yet. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/ios26_*" />
